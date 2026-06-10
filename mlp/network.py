@@ -1,6 +1,7 @@
-"""Arquitetura, forward pass, backpropagation e treinamento do MLP."""
-
 import numpy as np
+
+from mlp.activations import relu, relu_derivative, softmax
+from mlp.losses import cross_entropy_derivative
 
 
 class MLP:
@@ -32,3 +33,62 @@ class MLP:
                 * np.sqrt(2.0 / input_size)
             )
             self.parameters[f"b{layer_index}"] = np.zeros((1, output_size))
+
+    def forward(self, inputs):
+        """Executa o forward pass e retorna as probabilidades previstas."""
+        if inputs.ndim != 2 or inputs.shape[1] != self.layer_sizes[0]:
+            raise ValueError(
+                f"inputs deve possuir formato (amostras, {self.layer_sizes[0]})"
+            )
+
+        cache = {"A0": inputs}
+        activation = inputs
+
+        for layer_index in range(1, self.num_layers):
+            weights = self.parameters[f"W{layer_index}"]
+            biases = self.parameters[f"b{layer_index}"]
+
+            linear_output = activation @ weights + biases
+            activation = relu(linear_output)
+
+            cache[f"Z{layer_index}"] = linear_output
+            cache[f"A{layer_index}"] = activation
+
+        output_layer = self.num_layers
+        logits = (
+            activation @ self.parameters[f"W{output_layer}"]
+            + self.parameters[f"b{output_layer}"]
+        )
+        probabilities = softmax(logits)
+
+        cache[f"Z{output_layer}"] = logits
+        cache[f"A{output_layer}"] = probabilities
+        self.cache = cache
+
+        return probabilities
+
+    def backward(self, y_true):
+        """Calcula os gradientes dos parametros usando backpropagation."""
+        if not hasattr(self, "cache"):
+            raise RuntimeError("execute forward antes de backward")
+
+        predictions = self.cache[f"A{self.num_layers}"]
+        if y_true.shape != predictions.shape:
+            raise ValueError(f"y_true deve possuir formato {predictions.shape}")
+
+        gradients = {}
+        delta = cross_entropy_derivative(y_true, predictions)
+
+        for layer_index in range(self.num_layers, 0, -1):
+            previous_activation = self.cache[f"A{layer_index - 1}"]
+
+            gradients[f"W{layer_index}"] = previous_activation.T @ delta
+            gradients[f"b{layer_index}"] = np.sum(delta, axis=0, keepdims=True)
+
+            if layer_index > 1:
+                delta = (
+                    delta @ self.parameters[f"W{layer_index}"].T
+                    * relu_derivative(self.cache[f"Z{layer_index - 1}"])
+                )
+
+        return gradients
