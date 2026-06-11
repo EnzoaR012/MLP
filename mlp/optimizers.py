@@ -1,6 +1,3 @@
-"""Otimizadores usados para atualizar os parametros da rede."""
-
-
 class SGD:
     """Atualiza os parametros usando stochastic gradient descent."""
 
